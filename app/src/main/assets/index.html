@@ -1455,46 +1455,81 @@ function layer(map,muscles){
   return `<g fill="#E0A33C" opacity="${v>=1?1:.34}">${d}</g>`;}).join("");}
 function recColorPct(v){
  return v>=85?"#7FB069":v>=70?"#B5CE7E":v>=55?"#E0A33C":"#D97652";}
-/* Анатомические контуры для карты восстановления (упрощённый вариант —
-   используется силуэт SIL + цветовые зоны вместо полной схемы ANAT, чтобы
-   не тащить в новый файл 30 килобайт координат). */
+/* ---------- SVG-фигуры грузятся из assets/ ---------- */
+const FIG={m:{front:null,back:null},f:{front:null,back:null}};
+const FIG_MAP={
+ '#e63946':'chest','#e13c40':'chest','#e13d41':'chest','#e03b40':'chest',
+ '#b93738':'chest','#b63435':'chest','#bd383a':'chest','#be3838':'chest','#e13b40':'chest',
+ '#1d3557':'lats','#1d324f':'lats','#1e3350':'lats','#1c314e':'lats','#1e324f':'lats',
+ '#d6288a':'traps','#e22f84':'traps','#e23084':'traps','#e22f86':'traps',
+ '#f77f00':'delts_side','#ef7b19':'delts_side','#ef7a1a':'delts_side','#ef7a19':'delts_side',
+ '#b85c00':'delts_rear','#ca9e67':'delts_rear','#683d13':'delts_rear','#7d3f18':'delts_rear',
+ '#fde8a9':'delts_front','#fcbf49':'delts_front',
+ '#457b9d':'biceps','#4a79a5':'biceps','#4b79a4':'biceps','#4b7aa5':'biceps','#325877':'biceps','#375e7f':'biceps','#4a78a4':'biceps',
+ '#a8dadc':'triceps','#a2d6d8':'triceps','#a5d7d9':'triceps','#a1d5d6':'triceps','#a4d6d7':'triceps','#a6d7d8':'triceps','#a3d6d7':'triceps',
+ '#9d4edd':'forearms','#704f9b':'forearms','#71509c':'forearms','#714f9b':'forearms','#6f4e9b':'forearms','#704e9a':'forearms','#72509c':'forearms',
+ '#ff6b9d':'quads','#ec6596':'quads','#ec6396':'quads','#ec6196':'quads','#ec6097':'quads','#ec6192':'quads','#ec6394':'quads','#ec6494':'quads','#ec6293':'quads','#ec6095':'quads',
+ '#ff8c42':'hams','#f18538':'hams','#f18438':'hams','#f18539':'hams','#ef8532':'hams','#e77f2d':'hams',
+ '#b57edc':'glutes','#9979b5':'glutes','#9777b4':'glutes',
+ '#2ec4b6':'calves','#49bbc2':'calves','#4bbbc0':'calves','#4abbc3':'calves','#4abcc3':'calves','#49bcc3':'calves','#48bbc5':'calves','#4cbcc4':'calves','#4cbcc3':'calves','#4bbcc4':'calves','#49bbc3':'calves','#4bb7bf':'calves','#4abbc2':'calves','#4ebcc3':'calves','#49bbc1':'calves','#48bbc1':'calves','#50bcc2':'calves','#49bcc2':'calves',
+ '#ffd23f':'abs','#fcca3a':'abs','#fcca39':'abs','#fcca3b':'abs','#fdcb3b':'abs','#fcc93b':'abs','#fdc939':'abs','#fdcc3c':'abs','#fdc93b':'abs','#fcc939':'abs','#fdcc3b':'abs','#fcc83a':'abs','#fcc83b':'abs','#fdc83a':'abs','#fdc839':'abs',
+ '#8ac926':'obliques','#9fc431':'obliques','#9dc22f':'obliques','#9dc22e':'obliques','#9dc12d':'obliques','#99bd2d':'obliques','#9bc12d':'obliques','#9ec230':'obliques','#9bc031':'obliques','#9ec32e':'obliques','#9ec431':'obliques','#9fc232':'obliques','#9ec32f':'obliques','#9dc32e':'obliques',
+ '#8b1e3f':'lower_back','#7f243d':'lower_back','#88324f':'lower_back','#883052':'lower_back',
+ '#6c757d':'neck'
+};
+async function loadFigures(){
+ const list=[['m','front'],['m','back'],['f','front'],['f','back']];
+ await Promise.all(list.map(async ([sex,view])=>{
+  try{
+   const r=await fetch((sex==='f'?'female':'male')+'_'+view+'.svg');
+   const txt=await r.text();
+   const doc=new DOMParser().parseFromString(txt,'image/svg+xml');
+   FIG[sex][view]=doc.documentElement;
+  }catch(e){console.warn('SVG load failed',sex,view,e);}
+ }));
+}
+function svgFigure(sex,view,colorFn,w){
+ const src=FIG[sex]&&FIG[sex][view];
+ if(!src)return '';
+ const clone=src.cloneNode(true);
+ const st=src.querySelector('style');
+ const styles={};
+ if(st){const re=/\.([\w-]+)\s*\{[^}]*fill:\s*(#[0-9a-fA-F]+)/g;let m;
+  while((m=re.exec(st.textContent)))styles[m[1]]=m[2].toLowerCase();}
+ clone.querySelectorAll('path').forEach(p=>{
+  let hex=(p.getAttribute('fill')||'').toLowerCase();
+  if(!hex||hex==='none'){
+   const cls=(p.getAttribute('class')||'').trim().split(/\s+/)[0];
+   if(cls&&styles[cls])hex=styles[cls];
+  }
+  const muscle=FIG_MAP[hex];
+  if(!muscle)return;
+  const c=colorFn(muscle);
+  if(c){p.setAttribute('fill',c.fill);
+   p.removeAttribute('class');
+   if(c.opacity!=null)p.setAttribute('opacity',c.opacity);}
+  else p.setAttribute('fill','#3A3F49');
+ });
+ const vb=(clone.getAttribute('viewBox')||'0 0 200 400').split(' ');
+ const aspect=vb.length===4?Number(vb[3])/Number(vb[2]):2.5;
+ clone.setAttribute('width',w);
+ clone.setAttribute('height',Math.round(w*aspect));
+ clone.removeAttribute('class');
+ return clone.outerHTML;
+}
 function recoveryFigure(rec,w){
- const sex=A().profile.sex==="f"?"f":"m";
- const groups=["chest","lats","delts_side","quads","hams","glutes","biceps","triceps","abs"];
- const colorOf=m=>recColorPct(rec[m]===undefined?100:rec[m]);
- const mk=m=>{const v=rec[m]===undefined?100:rec[m];
-  return `<g fill="${recColorPct(v)}" opacity=".9">`;
+ const a=A(),sex=a.profile.sex==='f'?'f':'m';
+ const colorFn=m=>{
+  const r=rec[m]===undefined?100:rec[m];
+  const fill=r>=85?'#7FB069':r>=70?'#B5CE7E':r>=55?'#E0A33C':'#D97652';
+  return{fill,opacity:Math.max(.35,Math.min(1,r/100))};
  };
- /* Грудная клетка, спина, дельты, ноги — рисуем зоны поверх силуэта */
- const zone=(cx,cy,rx,ry,m,extra="")=>`<ellipse cx="${cx}" cy="${cy}" rx="${rx}" ry="${ry}"
-   fill="${colorOf(m)}" opacity=".85"/>`;
- return `<svg viewBox="0 0 140 126" width="${w}" height="${w*126/140}">
-  <g fill="#363B45">${SIL}</g>
-  ${zone(28,33,6,5.5,"chest")}
-  ${zone(40,33,6,5.5,"chest")}
-  ${zone(17,31.5,6.2,6.8,"delts_side")}
-  ${zone(51,31.5,6.2,6.8,"delts_side")}
-  ${zone(14.2,44,4.4,8.6,"biceps")}
-  ${zone(53.8,44,4.4,8.6,"biceps")}
-  ${zone(28,90,6.5,12,"quads")}
-  ${zone(40,90,6.5,12,"quads")}
-  ${zone(31,48,5,7,"abs")}
-  <g transform="translate(72,0)">
-   <g fill="#363B45">${SIL}</g>
-   ${zone(24,38,7,9,"lats")}
-   ${zone(44,38,7,9,"lats")}
-   ${zone(17,31.5,6.2,6.8,"delts_rear")}
-   ${zone(51,31.5,6.2,6.8,"delts_rear")}
-   ${zone(14.2,44,4.4,9,"triceps")}
-   ${zone(53.8,44,4.4,9,"triceps")}
-   ${zone(25,70,7,6,"glutes")}
-   ${zone(43,70,7,6,"glutes")}
-   ${zone(25.8,92,5.6,11.5,"hams")}
-   ${zone(42.2,92,5.6,11.5,"hams")}
-  </g>
- </svg>`;}
-
-function bodyMap(muscles,w){
+ const half=Math.round(w/2-6);
+ const front=svgFigure(sex,'front',colorFn,half);
+ const back=svgFigure(sex,'back',colorFn,half);
+ return `<div style="display:flex;gap:12px;justify-content:center;align-items:flex-start">${front}${back}</div>`;
+}
+ function bodyMap(muscles,w){
  return `<svg viewBox="0 0 140 126" width="${w}" height="${w*126/140}">
   <g fill="#363B45">${SIL}</g>${layer(FRONT,muscles)}
   <g transform="translate(72,0)"><g fill="#363B45">${SIL}</g>${layer(BACK,muscles)}</g>
@@ -2536,6 +2571,9 @@ window.addEventListener("scroll",()=>{
  if(want!==figSmall){figSmall=want;
   const w=el("figWrap");if(w)w.classList.toggle("small",figSmall);}},{passive:true});
 
-render();
-if(A().current&&A().current.restUntil){tickRest();rest.timer=setInterval(tickRest,500);}
+(async()=>{
+ await loadFigures();
+ render();
+ if(A().current&&A().current.restUntil){tickRest();rest.timer=setInterval(tickRest,500);}
+})();
 </script>
