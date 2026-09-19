@@ -164,6 +164,13 @@ public class MainActivity extends AppCompatActivity {
 
         @JavascriptInterface
         public String platform() { return "android"; }
+
+        @JavascriptInterface
+        public void keepScreenOn(final boolean on) {
+            runOnUiThread(() -> {
+                if (web != null) web.setKeepScreenOn(on);
+            });
+        }
     }
 
     private PendingIntent restIntent() {
