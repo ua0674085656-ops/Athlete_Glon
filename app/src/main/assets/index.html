@@ -942,21 +942,28 @@ const primaryOf=id=>Object.keys(EX[id].muscles).find(m=>EX[id].muscles[m]===1&&M
    ГЕНЕРАТОР
    ============================================================ */
 const THEMES={
- full:{ru:"Всё тело",uk:"Все тіло",m:["quads","chest","lats","hams","delts_side","glutes","biceps","triceps","abs"]},
- push:{ru:"Грудь · Плечи · Трицепс",uk:"Груди · Плечі · Тріцепс",m:["chest","delts_side","triceps"]},
- pull:{ru:"Спина · Задняя дельта · Бицепс",uk:"Спина · Задня дельта · Біцепс",m:["lats","traps","delts_rear","biceps","forearms"]},
- legs:{ru:"Ноги · Ягодицы",uk:"Ноги · Сідниці",m:["quads","hams","glutes","calves","abs"]},
- back:{ru:"Спина · Задняя дельта",uk:"Спина · Задня дельта",m:["lats","traps","delts_rear"]},
- chestd:{ru:"Грудь · Трицепс",uk:"Груди · Тріцепс",m:["chest","triceps"]},
- delts:{ru:"Плечи · Трапеции",uk:"Плечі · Трапеції",m:["delts_side","delts_rear","traps"]},
- arms:{ru:"Руки · Пресс",uk:"Руки · Прес",m:["biceps","triceps","forearms","abs"]},
- deltarms:{ru:"Плечи · Руки · Пресс",uk:"Плечі · Руки · Прес",m:["delts_side","delts_rear","traps","biceps","triceps","abs"]}};
+ full:{ru:"Всё тело",uk:"Все тіло",m:["quads","chest","lats","hams","delts_side","delts_front","glutes","biceps","triceps","abs","obliques","lower_back"]},
+ push:{ru:"Грудь · Плечи · Трицепс",uk:"Груди · Плечі · Тріцепс",m:["chest","delts_side","delts_front","triceps"]},
+ pull:{ru:"Спина · Задняя дельта · Бицепс",uk:"Спина · Задня дельта · Біцепс",m:["lats","traps","delts_rear","lower_back","biceps","forearms"]},
+ legs:{ru:"Ноги · Ягодицы",uk:"Ноги · Сідниці",m:["quads","hams","glutes","calves","abs","obliques"]},
+ back:{ru:"Спина · Задняя дельта",uk:"Спина · Задня дельта",m:["lats","traps","delts_rear","lower_back"]},
+ chestd:{ru:"Грудь · Трицепс",uk:"Груди · Тріцепс",m:["chest","delts_front","triceps"]},
+ delts:{ru:"Плечи · Трапеции · Шея",uk:"Плечі · Трапеції · Шия",m:["delts_side","delts_rear","traps","neck"]},
+ arms:{ru:"Руки · Пресс",uk:"Руки · Прес",m:["biceps","triceps","forearms","abs","obliques"]},
+ deltarms:{ru:"Плечи · Руки · Пресс · Шея",uk:"Плечі · Руки · Прес · Шия",m:["delts_side","delts_rear","traps","neck","biceps","triceps","abs","obliques"]}};
 const SPLITS={1:["full"],2:["full","full"],3:["push","pull","legs"],
  4:["pull","chestd","legs","deltarms"],
  5:["back","chestd","legs","delts","arms"],
  6:["push","pull","legs","push","pull","legs"],
  7:["push","pull","legs","push","pull","legs","arms"]};
-const sessionCap=m=>MUSCLES[m].size==="large"?8:6;
+function sessionCap(m){
+ const a=A();
+ const s=MUSCLES[m].size;
+ const lvl=a.profile.experience;
+ const k=lvl==="advanced"?1.25:lvl==="beginner"?0.75:1;
+ const base=(s==="large"?8:6)*k;
+ const capped=isMinor(a)?base*0.7:base;
+ return Math.max(3,Math.round(capped));}
 
 function generateWeek(){
  const p=A().profile,days=[...p.trainingDays].sort((a,b)=>a-b);
@@ -986,7 +993,7 @@ function allocate(targetIn){
  const exCount=m=>EXERCISES.filter(e=>fitScore(e)!==null&&primaryOf(e.id)===m).length;
  const capacity=(m,n)=>n*Math.min(exCount(m),3)*(MUSCLES[m].size==="large"?4:3.5);
  const FAMILY={chest:"push",delts_front:"push",delts_side:"push",triceps:"push",
-  lats:"pull",traps:"pull",lower_back:"pull",obliques:"core",
+  lats:"pull",traps:"pull",lower_back:"pull",obliques:"core",neck:"pull",
   delts_rear:"pull",biceps:"pull",forearms:"pull",quads:"legs",hams:"legs",glutes:"legs",
   calves:"legs",abs:"core"};
  const dayFam=x=>new Set(x.muscles.map(k=>FAMILY[k]).filter(f=>f&&f!=="core"));
@@ -1297,9 +1304,17 @@ function fatRateKg(){const m=lastMeas();return m&&m.weight?m.weight*.004*4.33:1.
 function bodyFatPct(){
  const m=lastMeas(),a=A();
  if(m&&m.bodyFat)return m.bodyFat/100;
- if(m&&m.waist&&m.neck&&a.profile.heightCm){
-  const v=86.010*Math.log10(m.waist-m.neck)-70.041*Math.log10(a.profile.heightCm)+36.76;
-  if(v>4&&v<60)return v/100;}
+ const h=a.profile.heightCm;
+ if(!h||!m)return a.profile.sex==="f"?.30:.25;
+ let v=null;
+ if(a.profile.sex==="f"){
+  if(m.waist&&m.hips&&m.neck&&(m.waist+m.hips-m.neck)>0)
+   v=163.205*Math.log10(m.waist+m.hips-m.neck)-97.684*Math.log10(h)-78.387;
+ }else{
+  if(m.waist&&m.neck&&(m.waist-m.neck)>0)
+   v=86.010*Math.log10(m.waist-m.neck)-70.041*Math.log10(h)+36.76;
+ }
+ if(v!=null&&v>4&&v<60)return v/100;
  return a.profile.sex==="f"?.30:.25;}
 function translateGoal(){
  const a=A(),p=a.profile,m=lastMeas(),d=p.desire||{};
