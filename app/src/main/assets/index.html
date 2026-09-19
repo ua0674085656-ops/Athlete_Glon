@@ -808,6 +808,7 @@ function decayFactor(h,m){return Math.pow(.5,h/decayHalflife(m));}
 function recovery(){
  const now=Date.now(),acc={},a=A();Object.keys(MUSCLES).forEach(m=>acc[m]=0);
  const k={beginner:1.2,intermediate:1,advanced:.85}[a.profile.experience]||1;
+ const ageK=ageOf(a)>=50?1.2:ageOf(a)>=40?1.1:1;
  a.sessions.slice(-14).forEach(s=>{const h=(now-new Date(s.finishedAt).getTime())/36e5;
   s.sets.forEach(x=>{const ex=EX[x.exerciseId];if(!ex)return;
    const iF={0:1.3,1:1.15,2:1,3:.85}[x.rir]??.7;
