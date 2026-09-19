@@ -796,6 +796,23 @@ const PRIO=()=>A().profile.priority||prioritiesFromDesire(A().profile)||prioriti
 function weightStep(ex){const g=gym();
  let s=ex.equipment.includes("dumbbell")?g.dbStep:ex.equipment.includes("barbell")?g.barStep:2.5;
  return isMinor(A())?Math.max(.5,s/2):s;}
+const BW_SHARE={
+ squat_bb:.40,deadlift:.50,rdl:.40,row_bb:.35,hip_thrust:.40,
+ hack_squat:.45,leg_press:.70,bench_bb:.35,
+ bench_db:.13,bench_incline_db:.11,press_machine:.30,
+ ohp_db:.10,ohp_machine:.15,row_cable:.35,row_db:.13,
+ lat_pulldown:.40,chest_row:.30,shrug:.30,leg_curl:.20,leg_ext:.20,
+ calf_standing:.60,calf_seated:.40,curl_db:.06,curl_cable:.10,
+ curl_hammer:.06,pushdown:.15,overhead_ext:.10,lateral_db:.05,
+ lateral_cable:.05,lateral_machine:.06,rear_delt_machine:.06,
+ rear_fly:.03,face_pull:.15,pullover_cable:.15,pec_deck:.20,fly_cable:.05};
+function initialWeight(ex){
+ const share=BW_SHARE[ex.id];
+ if(!share)return null;
+ const m=lastMeas();
+ const bw=m&&m.weight?m.weight:(A().profile.sex==="f"?62:80);
+ const step=weightStep(ex);
+ return Math.max(step,Math.round(bw*share/step)*step);}
 function lastSets(id){const S=A().sessions;
  for(let i=S.length-1;i>=0;i--){const s=S[i].sets.filter(x=>x.exerciseId===id);if(s.length)return s;}return null;}
 function recommend(id,i,range){
@@ -1812,7 +1829,10 @@ function renderWorkout(){
   <button class="btn-primary" id="startBtn" style="margin-top:12px">${t("start")}</button></div>`;return;}
  const cur=c.plan[c.exIndex],ex=EX[cur.exerciseId];
  const done=c.sets.filter(s=>s.exerciseId===ex.id),rc=recommend(ex.id,done.length,cur.reps);
- if(entry.weight===null)entry.weight=rc.weight??20;
+if(entry.weight===null){
+  if(rc.weight!=null)entry.weight=rc.weight;
+  else{const iw=initialWeight(ex);entry.weight=iw!=null?iw:"";}
+ }
  if(entry.reps===null)entry.reps=rc.reps;
  const prev=lastSets(ex.id);
  const left=c.plan.slice(c.exIndex).reduce((s,it,i)=>s+itemSeconds(
