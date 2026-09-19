@@ -181,20 +181,18 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void readBackup(Uri uri) {
-        try {
-            InputStream is = getContentResolver().openInputStream(uri);
-            BufferedReader br = new BufferedReader(new InputStreamReader(is, StandardCharsets.UTF_8));
-            StringBuilder sb = new StringBuilder();
-            String line;
-            while ((line = br.readLine()) != null) sb.append(line);
-            br.close();
-            String js = "window.onImport && window.onImport("
-                    + org.json.JSONObject.quote(sb.toString()) + ")";
-            web.evaluateJavascript(js, null);
-        } catch (Exception e) {
-            toast("Не удалось прочитать файл: " + e.getMessage());
-        }
+    try (InputStream is = getContentResolver().openInputStream(uri);
+         BufferedReader br = new BufferedReader(new InputStreamReader(is, StandardCharsets.UTF_8))) {
+        StringBuilder sb = new StringBuilder();
+        String line;
+        while ((line = br.readLine()) != null) sb.append(line);
+        String js = "window.onImport && window.onImport("
+                + org.json.JSONObject.quote(sb.toString()) + ")";
+        web.evaluateJavascript(js, null);
+    } catch (Exception e) {
+        toast("Не удалось прочитать файл: " + e.getMessage());
     }
+}
 
     private void createChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
