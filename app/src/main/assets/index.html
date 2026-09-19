@@ -1080,10 +1080,12 @@ function allocate(targetIn){
    it.rest=Math.round(ex.rest*D.restK/5)*5;
    it.rir=Math.max(D.rir[0],mesoEntry(mesoWeek()).rir);
    it.method="straight";
-   const small=MUSCLES[primaryOf(it.exerciseId)]&&MUSCLES[primaryOf(it.exerciseId)].size==="small";
-   if(sn.type==="metabolic"&&ex.type==="isolation"&&small)it.method="myo";
-   else if(sn.type==="hyper"&&it.exerciseId===lastIso)it.method="restpause";
-   if(sn.type==="metabolic"&&it.exerciseId===lastIso)it.method="drop";
+   if(p.useAdvancedMethods){
+    const small=MUSCLES[primaryOf(it.exerciseId)]&&MUSCLES[primaryOf(it.exerciseId)].size==="small";
+    if(sn.type==="metabolic"&&ex.type==="isolation"&&small)it.method="myo";
+    else if(sn.type==="hyper"&&it.exerciseId===lastIso)it.method="restpause";
+    if(sn.type==="metabolic"&&it.exerciseId===lastIso)it.method="drop";
+   }
    if(ex.type==="compound")it.rir=Math.max(1,D.rir[0]);});});
  const nCardio=cardioSessions(p);
  const legLoad=s=>(s.perMuscle.quads||0)+(s.perMuscle.hams||0)+(s.perMuscle.glutes||0);
@@ -2261,6 +2263,9 @@ function renderSettings(){
   <div class="set-item"><span>${t("autoFit")}</span>
    <select id="selFit"><option value="1"${p.autoFit!==false?" selected":""}>${L()==="ru"?"Да":"Так"}</option>
    <option value="0"${p.autoFit===false?" selected":""}>${L()==="ru"?"Нет":"Ні"}</option></select></div>
+  <div class="set-item"><span>${L()==="ru"?"Продвинутые методики":"Просунуті методики"}</span>
+   <select id="selAdv"><option value="0"${!p.useAdvancedMethods?" selected":""}>${L()==="ru"?"Выкл":"Вимк"}</option>
+   <option value="1"${p.useAdvancedMethods?" selected":""}>${L()==="ru"?"Вкл":"Увімк"}</option></select></div>
   <div class="set-item"><span>${t("cardioLab")}</span>
    <span class="muted num">${cardioSessions(p)} ${t("cardioSess")}</span></div></div>
  <div class="card"><h3>${t("profileLab")}</h3>
@@ -2398,7 +2403,9 @@ document.addEventListener("click",e=>{
  if(b.id==="restoreDesire"){const p=A().profile;
   if(p.desireBeforeFit){p.desire=p.desireBeforeFit;delete p.desireBeforeFit;}
   render();return;}
- if(b.id==="resetZones"){const p=A().profile;p.desire={};p.desireBeforeFit=null;
+ if(b.id==="resetZones"){
+  if(!confirm(L()==="ru"?"Сбросить все пожелания по зонам?":"Скинути всі побажання за зонами?"))return;
+  const p=A().profile;p.desire={};p.desireBeforeFit=null;
   p.goalBaseline=null;pathOpen=false;render();return;}
  if(b.id==="applyPrio"){
   const p=A().profile,before=weekSnap();
@@ -2428,10 +2435,14 @@ document.addEventListener("click",e=>{
   const i=a.checkins.findIndex(c=>new Date(c.date).toDateString()===d);
   if(i>=0)a.checkins[i]=rec;else a.checkins.push(rec);
   checkOpen=false;render();return;}
- if(b.id==="resetOverride"){override=null;render();return;}
+ if(b.id==="resetOverride"){
+  if(!confirm(L()==="ru"?"Вернуть сгенерированный план дня?":"Повернути згенерований план дня?"))return;
+  override=null;render();return;}
  if(b.id==="recalcPlanBtn"){const before=weekSnap();override=null;trim=null;
   prioDiff=snapDiff(before,weekSnap())||{added:[],removed:[],vol:[]};tab="today";render();return;}
- if(b.id==="resetPrio"){const before=weekSnap();A().profile.priority=null;
+ if(b.id==="resetPrio"){
+  if(!confirm(L()==="ru"?"Вернуть приоритеты из целей? Ручные правки сбросятся.":"Повернути пріоритети з цілей? Ручні правки скинуться."))return;
+  const before=weekSnap();A().profile.priority=null;
   fitAdviceReset();trim=null;override=null;prioDiff=snapDiff(before,weekSnap());render();return;}
  if(b.dataset.tab){tab=b.dataset.tab;render();return;}
  if(b.dataset.goal){const p=A().profile,g=b.dataset.goal;
@@ -2451,8 +2462,9 @@ document.addEventListener("click",e=>{
    minutes=Math.round((end-now)/60000);}
   if(!minutes||minutes<15)return;
   trim=trimPlan(item.plan,minutes);render();return;}
- if(b.id==="resetTrim"){trim=null;override=null;render();return;}
- if(b.id==="startBtn"){A().current?tab="workout":startSession();render();return;}
+ if(b.id==="resetTrim"){
+  if(!confirm(L()==="ru"?"Сбросить сокращённый план?":"Скинути скорочений план?"))return;
+  trim=null;override=null;render();return;}
  if(b.id==="saveSet"){saveSet();return;}
  if(b.id==="finishBtn"){finishSession();return;}
  if(b.id==="restSkip"){stopRest();return;}
@@ -2509,6 +2521,8 @@ document.addEventListener("change",e=>{
   p.trainingDays=[...DAY_PATTERN[n]];trim=null;render();return;}
  if(id==="inpLen"){p.sessionMinutes=Math.max(20,+e.target.value||70);trim=null;render();return;}
  if(id==="selFit"){p.autoFit=e.target.value==="1";trim=null;override=null;render();return;}
+ if(id==="selAdv"){p.useAdvancedMethods=e.target.value==="1";
+  fitAdviceReset();trim=null;override=null;render();return;}
  if(id==="inpTW"){p.targetWeight=parseFloat(e.target.value)||null;render();return;}
  if(id==="inpWant"){p.wantMonths=parseInt(e.target.value,10)||null;render();return;}
  if(id==="inpTD"){p.targetDate=e.target.value||null;render();return;}
