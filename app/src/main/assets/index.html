@@ -766,7 +766,26 @@ const DEFAULT_DB={schema:6,
    "hyper_bench","bodyweight"],barStep:2.5,dbStep:1}],
  activeGym:"gym_a",athletes:[newAthlete("a1","Владимир","m","1970-09-25",184,"advanced")],activeAthlete:"a1"};
 
-let DB=Store.load()||JSON.parse(JSON.stringify(DEFAULT_DB));
+const SCHEMA_CURRENT=6;
+function migrate(db){
+ if(!db||typeof db!=="object")return {db,log:["not an object"]};
+ if(!db.schema||typeof db.schema!=="number")db.schema=1;
+ const log=[];
+ if(db.schema>SCHEMA_CURRENT)
+  log.push("warning: db.schema="+db.schema+" > "+SCHEMA_CURRENT);
+ return {db,log};}
+let DB=(()=>{
+ try{
+  const loaded=Store.load();
+  const source=loaded||JSON.parse(JSON.stringify(DEFAULT_DB));
+  const {db,log}=migrate(source);
+  if(log.length)console.log("[Athlete Glon] migrate:",log.join(", "));
+  return db;
+ }catch(e){
+  console.error("[Athlete Glon] load failed:",e);
+  return JSON.parse(JSON.stringify(DEFAULT_DB));
+ }
+})();
 const persist=()=>Store.save(DB);
 function normalizeAthlete(a){
  if(!a||typeof a!=="object")return a;
@@ -1259,7 +1278,6 @@ function responseReport(){
   out.push({m,perWeek,tg,strength,girth,verdict,advice});});
  return out.length?out:null;}
 
-/* Кэш fitAdvice */
 let __fitCache=null,__fitKey="";
 function fitAdviceReset(){__fitKey="";__fitCache=null;}
 function fitAdvice(){
@@ -1314,9 +1332,6 @@ function snapDiff(a,b){
   .map(m=>({m,from:a.tg[m],to:b.tg[m]}));
  return(added.length||removed.length||vol.length)?{added,removed,vol}:null;}
 
-/* ============================================================
-   ЗОНЫ ТЕЛА
-   ============================================================ */
 const ZONES=[
  {id:"delts_side",n:{ru:"Плечи (ширина)",uk:"Плечі (ширина)"},m:"delts_side",girth:"shoulders",frac:.55,share:.10},
  {id:"delts_rear",n:{ru:"Задняя дельта",uk:"Задня дельта"},m:"delts_rear",girth:null,frac:.55,share:.04},
@@ -1398,9 +1413,6 @@ function prioritiesFromDesire(p){
   out[ZMAP[k].m]=rel>=.9?"max":rel>=.6?"high":rel>=.3?"normal":"maintain";});
  return out;}
 
-/* ============================================================
-   SVG-ФИГУРЫ из assets/
-   ============================================================ */
 const FIG={m:{front:null,back:null},f:{front:null,back:null}};
 const FIG_MAP={
  '#e63946':'chest','#e13c40':'chest','#e13d41':'chest','#e03b40':'chest',
@@ -1557,6 +1569,7 @@ const todaySession=()=>{const w=generateWeek(),ti=todayIdx();
  return{week:w,item:w.days.find(d=>d.day===ti)||w.days.find(d=>d.day>ti)||w.days[0],
   isToday:w.days.some(d=>d.day===ti)};};
 
+/* Патч 12: поиск по мышцам и оборудованию */
 function pickList(){
  const near=picker&&picker.near?primaryOf(picker.near):null;
  const q=pickQ.trim().toLowerCase();
@@ -1681,6 +1694,7 @@ function applyPick(exId){
   override=plan;}
  picker=null;pickQ="";render();}
 
+/* Патч 14a: schedulePersist + flushPersist */
 let _persistTimer=null;
 function schedulePersist(){
  if(_persistTimer)return;
@@ -1847,6 +1861,7 @@ function renderToday(){
     </div>`).join("")}</div>`:""}
  </div>`;}
 
+/* Патч 13a: keepScreenOn + persist при старте сессии */
 function startSession(){
  const a=A(),{item}=todaySession();if(!item)return;
  a.current={name:item.name,startedAt:new Date().toISOString(),exIndex:0,
@@ -1862,7 +1877,8 @@ function renderWorkout(){
   <button class="btn-primary" id="startBtn" style="margin-top:12px">${t("start")}</button></div>`;return;}
  const cur=c.plan[c.exIndex],ex=EX[cur.exerciseId];
  const done=c.sets.filter(s=>s.exerciseId===ex.id),rc=recommend(ex.id,done.length,cur.reps);
-if(entry.weight===null){
+ /* Патч 8b: initialWeight вместо 20 */
+ if(entry.weight===null){
   if(rc.weight!=null)entry.weight=rc.weight;
   else{const iw=initialWeight(ex);entry.weight=iw!=null?iw:"";}
  }
@@ -1927,13 +1943,15 @@ function saveSet(){
  startRest(it.rest||ex.rest);
  const rc=recommend(ex.id,c.sets.filter(s=>s.exerciseId===ex.id).length,it.reps);
  entry.weight=rc.weight??entry.weight;entry.reps=rc.reps;render();}
+
+/* Патч 13b: keepScreenOn + persist при завершении */
 function finishSession(){
  const a=A(),c=a.current;
  if(c&&c.sets.length)a.sessions.push({name:c.name,startedAt:c.startedAt,
   finishedAt:new Date().toISOString(),sets:c.sets});
- entry={weight:null,reps:null,rir:2};tab="workout";
- if(window.Native&&Native.keepScreenOn)try{Native.keepScreenOn(true);}catch(e){}
- persist();render();}
+ a.current=null;trim=null;stopRest();
+ if(window.Native&&Native.keepScreenOn)try{Native.keepScreenOn(false);}catch(e){}
+ tab="today";persist();render();}
 
 function startRest(sec){
  const c=A().current;if(!c)return;
@@ -2005,7 +2023,6 @@ document.addEventListener("visibilitychange",()=>{if(!document.hidden){
  const c=A().current;
  if(c&&c.restUntil){tickRest();if(!rest.timer)rest.timer=setInterval(tickRest,500);}}});
 
-/* ТЕЛО И ЦЕЛИ */
 function zoneRow(z,d){
  const v=d[z.id]||0,lo=z.fat?-40:-20,hi=z.fat?20:50;
  return `<div class="zone-block">
@@ -2325,7 +2342,8 @@ function renderSettings(){
    <option value="uk"${p.locale==="uk"?" selected":""}>Українська</option></select></div>
   <div class="set-item"><span>${t("barStep")}</span><input type="number" step="0.25" id="inpBar" value="${g.barStep}"></div>
   <div class="set-item"><span>${t("dbStep")}</span><input type="number" step="0.5" id="inpDb" value="${g.dbStep}"></div>
- </div>
+  <div class="set-item"><span>${L()==="ru"?"Хранилище":"Сховище"}</span>
+   <span class="muted">${Store.mode==="local"?"localStorage":"память сессии"}</span></div></div>
  <div class="card"><button class="btn-ghost" id="expBtn">${t("exportD")}</button>
   <button class="btn-ghost" id="impBtn">${t("importD")}</button>
   <button class="btn-ghost" id="pasteBtn">${t("pasteD")}</button>
@@ -2352,7 +2370,7 @@ document.addEventListener("click",e=>{
   const na=newAthlete(nid,nm2,sx,bd,h,lvl);
   na.profile.locale=L();na.profile.goals=[];
   DB.athletes.push(na);DB.activeAthlete=nid;
-  newAth=false;trim=null;override=null;render();return;}
+  newAth=false;trim=null;override=null;persist();render();return;}
  if(b.dataset.pick){applyPick(b.dataset.pick);return;}
  if(b.id==="sheetClose"){picker=null;pickQ="";render();return;}
  if(b.id==="warmupSkip"){const c=A().current;
@@ -2467,7 +2485,7 @@ document.addEventListener("click",e=>{
   const d=new Date().toDateString();
   const i=a.checkins.findIndex(c=>new Date(c.date).toDateString()===d);
   if(i>=0)a.checkins[i]=rec;else a.checkins.push(rec);
-  checkOpen=false;render();return;}
+  checkOpen=false;persist();render();return;}
  if(b.id==="resetOverride"){
   if(!confirm(L()==="ru"?"Вернуть сгенерированный план дня?":"Повернути згенерований план дня?"))return;
   override=null;render();return;}
@@ -2498,6 +2516,7 @@ document.addEventListener("click",e=>{
  if(b.id==="resetTrim"){
   if(!confirm(L()==="ru"?"Сбросить сокращённый план?":"Скинути скорочений план?"))return;
   trim=null;override=null;render();return;}
+ if(b.id==="startBtn"){A().current?tab="workout":startSession();render();return;}
  if(b.id==="saveSet"){
   if(window.__setLock)return;
   window.__setLock=true;
@@ -2521,7 +2540,7 @@ document.addEventListener("click",e=>{
   el("fW").textContent=entry.weight;el("fR").textContent=entry.reps;return;}
  if(b.id==="saveMeas"){const rec={date:new Date().toISOString()};
   MFIELDS.forEach(f=>{const v=parseFloat(el("m_"+f).value);if(!isNaN(v))rec[f]=v;});
-  if(Object.keys(rec).length>1){A().measurements.push(rec);render();}return;}
+  if(Object.keys(rec).length>1){A().measurements.push(rec);persist();render();}return;}
  if(b.id==="expBtn"){
   const json=JSON.stringify(DB,null,1);
   const name="athlete-glon-"+new Date().toISOString().slice(0,10)+".json";
@@ -2596,18 +2615,21 @@ window.__onStorageFail=function(){
   ?"Хранилище переполнено — данные сохраняются только на время сессии."
   :"Сховище переповнено — дані зберігаються лише на час сесії.",true);};
 
+/* Патч 16: onImport с валидацией */
 window.onImport=function(text){
  try{
   const o=JSON.parse(text);
-  if(!o||!Array.isArray(o.athletes)||!o.athletes.length)throw new Error("bad");
+  if(!o||!Array.isArray(o.athletes)||!o.athletes.length)throw new Error("нет спортсменов");
+  o.athletes.forEach((a,i)=>{
+   if(!a.id||!a.name)throw new Error("атлет "+i+": нет id или имени");
+   if(!a.profile||typeof a.profile!=="object")
+    throw new Error("атлет "+i+": нет профиля");});
   DB=o;normalizeDB();
   trim=null;override=null;prioDiff=null;tab="today";persist();render();
   flash(t("importOk"));
- }catch(e){flash(t("importBad"),true);}};
+ }catch(e){flash(t("importBad")+(e.message?" ("+e.message+")":""),true);}};
 
-/* ============================================================
-   ЗАПУСК
-   ============================================================ */
+/* Патч 13c: keepScreenOn при возврате в активную сессию */
 (async()=>{
  await loadFigures();
  render();
