@@ -1830,7 +1830,9 @@ function startSession(){
  a.current={name:item.name,startedAt:new Date().toISOString(),exIndex:0,
   plan:JSON.parse(JSON.stringify(override||(trim?trim.plan:item.plan))),sets:[],
   warmupDone:{}};
- entry={weight:null,reps:null,rir:2};tab="workout";render();}
+ entry={weight:null,reps:null,rir:2};tab="workout";
+ if(window.Native&&Native.keepScreenOn)try{Native.keepScreenOn(true);}catch(e){}
+ persist();render();}
 
 function renderWorkout(){
  const a=A(),c=a.current;
@@ -1907,7 +1909,9 @@ function finishSession(){
  const a=A(),c=a.current;
  if(c&&c.sets.length)a.sessions.push({name:c.name,startedAt:c.startedAt,
   finishedAt:new Date().toISOString(),sets:c.sets});
- a.current=null;trim=null;stopRest();tab="today";render();}
+ entry={weight:null,reps:null,rir:2};tab="workout";
+ if(window.Native&&Native.keepScreenOn)try{Native.keepScreenOn(true);}catch(e){}
+ persist();render();}
 
 function startRest(sec){
  const c=A().current;if(!c)return;
@@ -2582,5 +2586,7 @@ window.onImport=function(text){
  await loadFigures();
  render();
  if(A().current&&A().current.restUntil){tickRest();rest.timer=setInterval(tickRest,500);}
+ if(A().current&&window.Native&&Native.keepScreenOn)
+  try{Native.keepScreenOn(true);}catch(e){}
 })();
 </script>
