@@ -737,8 +737,21 @@ const DAY_PATTERN={1:[0],2:[0,3],3:[0,2,4],4:[0,1,3,4],5:[0,1,2,3,4],6:[0,1,2,3,
 
 const Store=(()=>{const KEY="athlete_os_v8";let mem=null,mode="memory";
  try{localStorage.setItem("__t","1");localStorage.removeItem("__t");mode="local";}catch(e){}
- return{mode,load(){if(mode==="local"){const s=localStorage.getItem(KEY);return s?JSON.parse(s):null;}return mem;},
- save(o){if(mode==="local"){try{localStorage.setItem(KEY,JSON.stringify(o));}catch(e){mem=o;mode="memory";}}else mem=o;}};})();
+ return{
+  get mode(){return mode;},
+  load(){
+   if(mode==="local"){
+    try{const s=localStorage.getItem(KEY);return s?JSON.parse(s):null;}
+    catch(e){mode="memory";return mem;}}
+   return mem;},
+  save(o){
+   mem=o;
+   if(mode!=="local")return;
+   try{localStorage.setItem(KEY,JSON.stringify(o));}
+   catch(e){
+    mode="memory";
+    if(typeof window.__onStorageFail==="function")window.__onStorageFail(e);
+   }}};})();
 
 const newAthlete=(id,name,sex,birthDate,heightCm,exp)=>({id,name,
  profile:{sex,birthDate,heightCm,experience:exp,trainingDays:[0,1,2,3,4],sessionMinutes:70,
@@ -1668,6 +1681,15 @@ function applyPick(exId){
   override=plan;}
  picker=null;pickQ="";render();}
 
+let _persistTimer=null;
+function schedulePersist(){
+ if(_persistTimer)return;
+ _persistTimer=setTimeout(()=>{_persistTimer=null;persist();},400);}
+function flushPersist(){
+ if(_persistTimer){clearTimeout(_persistTimer);_persistTimer=null;persist();}}
+document.addEventListener("visibilitychange",()=>{if(document.hidden)flushPersist();});
+window.addEventListener("pagehide",flushPersist);
+
 function render(){
  el("athSel").innerHTML=DB.athletes.map(a=>
   `<option value="${a.id}"${a.id===DB.activeAthlete?" selected":""}>${a.name}</option>`).join("")
@@ -1679,7 +1701,7 @@ function render(){
  renderSheet();
  el("nav").innerHTML=[["today","▣"],["workout","▶"],["body","◎"],["stats","◧"],["base","☰"],["settings","⚙"]]
   .map(([k,i])=>`<button data-tab="${k}" class="${tab===k?"on":""}"><span class="ic">${i}</span>${t(k)}</button>`).join("");
- persist();}
+ schedulePersist();}
 
 function renderToday(){
  const a=A(),rec=recovery(),{week,item,isToday}=todaySession();
@@ -2569,6 +2591,10 @@ function flash(msg,bad){
   "border-radius:12px;font-weight:600;text-align:center;"+
   (bad?"background:#D97652;color:#20120C":"background:#B5CE7E;color:#1B2110");
  clearTimeout(window.__ft);window.__ft=setTimeout(()=>b.remove(),3000);}
+window.__onStorageFail=function(){
+ flash(L()==="ru"
+  ?"Хранилище переполнено — данные сохраняются только на время сессии."
+  :"Сховище переповнено — дані зберігаються лише на час сесії.",true);};
 
 window.onImport=function(text){
  try{
