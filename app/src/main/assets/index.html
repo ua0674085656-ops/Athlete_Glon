@@ -1548,8 +1548,15 @@ function pickList(){
  const near=picker&&picker.near?primaryOf(picker.near):null;
  const q=pickQ.trim().toLowerCase();
  return EXERCISES.map(e=>({e,f:fitScore(e)})).filter(x=>x.f!==null)
-  .filter(({e})=>!q||nm(e).toLowerCase().includes(q)||e.name.ru.toLowerCase().includes(q)
-    ||e.name.uk.toLowerCase().includes(q))
+  .filter(({e})=>{
+   if(!q)return true;
+   if(nm(e).toLowerCase().includes(q))return true;
+   if(e.name.ru.toLowerCase().includes(q))return true;
+   if(e.name.uk.toLowerCase().includes(q))return true;
+   if(Object.keys(e.muscles).some(m=>MUSCLES[m]&&
+     MUSCLES[m][L()].toLowerCase().includes(q)))return true;
+   if(e.equipment.some(eq=>eq.includes(q)))return true;
+   return false;})
   .sort((a,b)=>{
    const sa=near&&primaryOf(a.e.id)===near?1:0,sb=near&&primaryOf(b.e.id)===near?1:0;
    return(sb-sa)||(b.f-a.f);});}
@@ -2465,7 +2472,11 @@ document.addEventListener("click",e=>{
  if(b.id==="resetTrim"){
   if(!confirm(L()==="ru"?"Сбросить сокращённый план?":"Скинути скорочений план?"))return;
   trim=null;override=null;render();return;}
- if(b.id==="saveSet"){saveSet();return;}
+ if(b.id==="saveSet"){
+  if(window.__setLock)return;
+  window.__setLock=true;
+  setTimeout(()=>{window.__setLock=false;},700);
+  saveSet();return;}
  if(b.id==="finishBtn"){finishSession();return;}
  if(b.id==="restSkip"){stopRest();return;}
  if(b.dataset.rest){
