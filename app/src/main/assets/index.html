@@ -1614,10 +1614,22 @@ function figureSVG(sex,k,color,w){
 function recColorPct(v){
  return v>=70?SKIN:v>=55?'#E0A33C':'#D97652';}
 
+// «Спинные» мышцы: при большей сумме весов аватар со спины;
+// при ничьей — женщины со спины (ягодицы/задняя поверхность), мужчины спереди (квадрицепс)
+const BACK_MUSCLES=new Set(["lats","traps","delts_rear","lower_back","hams","glutes","calves","triceps"]);
+function viewForExercise(muscles,sex){
+ let back=0,front=0;
+ Object.entries(muscles).forEach(([m,w])=>{
+  if(BACK_MUSCLES.has(m))back+=w;else front+=w;});
+ if(back>front)return"back";
+ if(front>back)return"front";
+ return sex==="f"?"back":"front";}
+
 function bodyMap(muscles,w){
  const sex=A().profile.sex==='f'?'f':'m';
- if(!FIG[sex]||!FIG[sex].front)return'';
- const clone=FIG[sex].front.cloneNode(true);
+ const view=viewForExercise(muscles,sex);
+ if(!FIG[sex]||!FIG[sex][view])return'';
+ const clone=FIG[sex][view].cloneNode(true);
  const styles={};const st=clone.querySelector('style');
  if(st){const re=/\.([a-zA-Z0-9_-]+)\s*\{([^}]*)\}/g;let m;
   while((m=re.exec(st.textContent||''))){
