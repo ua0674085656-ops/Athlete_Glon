@@ -109,6 +109,10 @@ main{padding:0 16px}
 select,input[type=number],input[type=text],input[type=time],input[type=date]{background:var(--surface-2);
  color:var(--ink);border:1px solid var(--line);border-radius:9px;padding:8px 10px;font:inherit;max-width:150px}
 input[type=number]{width:92px;text-align:right}
+.ck-s{margin:12px 0}
+.ck-h{font-size:13px;color:var(--muted);margin-bottom:4px}
+.ck-h b{color:var(--text)}
+.ck-e{display:flex;justify-content:space-between;font-size:11px;color:var(--muted);margin-top:2px}
 .mgrid{display:grid;grid-template-columns:1fr 1fr;gap:8px 12px}
 .mgrid label{display:flex;justify-content:space-between;align-items:center;gap:6px;font-size:14px;color:var(--ink-dim)}
 .mgrid input{width:74px;padding:6px 8px}
@@ -272,8 +276,10 @@ const I18N={
   shortTitle:"Что не помещается",
   dayType:"Тип дня",meso:"Мезоцикл",weekOf:"Неделя %1 из 8",deloadWeek:"Разгрузочная неделя",
   readiness:"Готовность",checkin:"Утренний опрос",sleepH:"Сон, часов",soreness:"Мышечная боль 0–10",
-  painJ:"Суставы 0–10",stressL:"Стресс 0–10",fatigueL:"Усталость 0–10",cycleL:"Фаза цикла",
+  painJ:"Суставы 0–10",stressL:"Стресс 0–10",fatigueL:"Бодрость/усталость",cycleL:"Фаза цикла",
   cycleOpts:["—","Менструация","Фолликулярная","Овуляция","Лютеиновая"],
+  fresh:"бодр",tired:"устал",calm:"спокоен",stressed:"стресс",
+  noPain:"нет боли",strongPain:"сильная боль",
   saveCheck:"Записать",velLab:"Скорость, м/с (необяз.)",
   rdHigh:"Можно работать тяжело",rdMid:"Обычная тренировка",rdLow:"Снизить объём на 25%",
   noCheck:"Заполните утренний опрос — готовность считается по нему и восстановлению",
@@ -388,8 +394,10 @@ const I18N={
   shortTitle:"Що не вміщується",
   dayType:"Тип дня",meso:"Мезоцикл",weekOf:"Тиждень %1 з 8",deloadWeek:"Розвантажувальний тиждень",
   readiness:"Готовність",checkin:"Ранкове опитування",sleepH:"Сон, годин",soreness:"М'язовий біль 0–10",
-  painJ:"Суглоби 0–10",stressL:"Стрес 0–10",fatigueL:"Втома 0–10",cycleL:"Фаза циклу",
+  painJ:"Суглоби 0–10",stressL:"Стрес 0–10",fatigueL:"Бадрість/втома",cycleL:"Фаза циклу",
   cycleOpts:["—","Менструація","Фолікулярна","Овуляція","Лютеинова"],
+  fresh:"бадьорий",tired:"втомлений",calm:"спокійний",stressed:"стрес",
+  noPain:"без болю",strongPain:"сильний біль",
   saveCheck:"Записати",velLab:"Швидкість, м/с (необов.)",
   rdHigh:"Можна працювати важко",rdMid:"Звичайне тренування",rdLow:"Знизити обсяг на 25%",
   noCheck:"Заповніть ранкове опитування",
@@ -1379,14 +1387,16 @@ function readiness(){
  const c=todayCheck();if(!c)return null;
  const sleepS=c.sleep<6?1:c.sleep<7?3:c.sleep<8?4:c.sleep<9?5:6;
  const inv=v=>v==null?3:Math.max(1,Math.min(5,5-Math.round(v/2.5)));
- const score=sleepS+inv(c.soreness)+inv(c.stress)+inv(c.pain)+inv(c.fatigue);
+ const fr=c.fatigue||0;                    // биполяр: <0 бодрость, >0 усталость
+ const score=sleepS+inv(c.soreness)+inv(c.stress)+inv(c.pain)+inv(Math.max(0,fr));
+ const freshBonus=fr<=-5?1:0;              // выраженная бодрость — бонус к готовности
  const cyc=c.cycle||0;                                 // фаза цикла (жен.)
  const cycPenalty=cyc===4?3:cyc===1?1:0;               // позднелютеиновая/менструация
  const rec=recovery();
  const main=["chest","lats","delts_side","quads","hams"];
  const avgRec=main.reduce((s,m)=>s+rec[m],0)/main.length;
  const recPenalty=Math.round(Math.max(0,60-avgRec)/12);// 0..5 за недовосстановленные мышцы
- const total=Math.max(6,Math.min(30,score-cycPenalty-recPenalty));
+ const total=Math.max(6,Math.min(30,score+freshBonus-cycPenalty-recPenalty));
  return{v:Math.round(total/30*100),
   verdict:total>=25?"rdHigh":total>=20?"rdMid":"rdLow",
   cut:total<15?.4:total<20?.25:0};}
@@ -1820,13 +1830,33 @@ function renderToday(){
     <button class="chip" data-check="open">${t("checkin")}</button>
    </div>
    ${checkOpen?`<div style="margin-top:10px">
-    <div class="mgrid">
-     <label>${t("sleepH")}<input type="number" step="0.5" id="ck_sleep" value="${c?c.sleep:7}"></label>
-     <label>${t("soreness")}<input type="number" id="ck_sore" value="${c?c.soreness:0}"></label>
-     <label>${t("painJ")}<input type="number" id="ck_pain" value="${c?c.pain:0}"></label>
-     <label>${t("stressL")}<input type="number" id="ck_stress" value="${c?c.stress:0}"></label>
-     <label>${t("fatigueL")}<input type="number" id="ck_fat" value="${c?c.fatigue:0}"></label>
-     ${a.profile.sex==="f"?`<label>${t("cycleL")}<select id="ck_cycle">${t("cycleOpts").map((o,i)=>`<option value="${i}" ${((c&&c.cycle)||0)===i?"selected":""}>${o}</option>`).join("")}</select></label>`:""}
+    <div>
+     <div class="ck-s">
+      <div class="ck-h">${t("sleepH")}: <b class="num" id="ckv_sleep">${c?c.sleep:7}</b></div>
+      <input type="range" id="ck_sleep" min="0" max="20" step="0.5" value="${c?c.sleep:7}" oninput="el('ckv_sleep').textContent=this.value">
+      <div class="ck-e"><span>0</span><span>20</span></div>
+     </div>
+     <div class="ck-s">
+      <div class="ck-h">${t("soreness")}: <b class="num" id="ckv_sore">${c?c.soreness:0}</b></div>
+      <input type="range" id="ck_sore" min="0" max="10" step="1" value="${c?c.soreness:0}" oninput="el('ckv_sore').textContent=this.value">
+      <div class="ck-e"><span>${t("noPain")}</span><span>${t("strongPain")}</span></div>
+     </div>
+     <div class="ck-s">
+      <div class="ck-h">${t("painJ")}: <b class="num" id="ckv_pain">${c?c.pain:0}</b></div>
+      <input type="range" id="ck_pain" min="0" max="10" step="1" value="${c?c.pain:0}" oninput="el('ckv_pain').textContent=this.value">
+      <div class="ck-e"><span>${t("noPain")}</span><span>${t("strongPain")}</span></div>
+     </div>
+     <div class="ck-s">
+      <div class="ck-h">${t("stressL")}: <b class="num" id="ckv_stress">${c?c.stress:0}</b></div>
+      <input type="range" id="ck_stress" min="0" max="10" step="1" value="${c?c.stress:0}" oninput="el('ckv_stress').textContent=this.value">
+      <div class="ck-e"><span>${t("calm")}</span><span>${t("stressed")}</span></div>
+     </div>
+     <div class="ck-s">
+      <div class="ck-h">${t("fatigueL")}: <b class="num" id="ckv_fat">${(c&&c.fatigue)||0}</b></div>
+      <input type="range" id="ck_fat" min="-10" max="10" step="1" value="${(c&&c.fatigue)||0}" oninput="el('ckv_fat').textContent=(+this.value>0?'+':'')+this.value">
+      <div class="ck-e"><span>${t("fresh")}</span><span>0</span><span>${t("tired")}</span></div>
+     </div>
+     ${a.profile.sex==="f"?`<div class="ck-s"><div class="ck-h">${t("cycleL")}</div><select id="ck_cycle">${t("cycleOpts").map((o,i)=>`<option value="${i}" ${((c&&c.cycle)||0)===i?"selected":""}>${o}</option>`).join("")}</select></div>`:""}
     </div>
     <button class="btn-primary" id="saveCheck" style="margin-top:10px">${t("saveCheck")}</button>
    </div>`:""}
@@ -2123,7 +2153,8 @@ function liveZone(id,val){
   sp.style.color=val?"var(--brass)":"var(--ink-dim)";}
  const fg=el("figGoal");
  const sex=A().profile.sex==="f"?"f":"m";
- if(fg)fg.innerHTML=figureSVG(sex,null,"#B5CE7E",140);
+ if(fg){const zf=measZoneFactors();
+  fg.innerHTML=figureBody(sex,mid2=>zf?(zf[mid2]||1)*(1+((p.desire[mid2]||0)/100)):1,140);}
  const gs=el("grpSum_"+(ZMAP[id]?groupOf(id):""));
  if(gs)gs.textContent=groupSummary(groupOf(id),p.desire);}
 function groupOf(zid){const g=ZGROUPS.find(g=>g.z.includes(zid));return g?g.id:"";}
